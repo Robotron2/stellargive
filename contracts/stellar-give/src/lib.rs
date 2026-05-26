@@ -70,14 +70,16 @@ fn campaign_key(id: u64) -> (Symbol, u64) {
 }
 
 fn read_next_id(env: &Env) -> u64 {
+    // Instance storage is cheaper per access than Persistent and its lifetime
+    // is managed with the contract instance, so no manual TTL extension needed.
     env.storage()
-        .persistent()
+        .instance()
         .get(&next_id_key())
         .unwrap_or(1_u64)
 }
 
 fn write_next_id(env: &Env, next_id: u64) {
-    env.storage().persistent().set(&next_id_key(), &next_id);
+    env.storage().instance().set(&next_id_key(), &next_id);
 }
 
 fn read_campaign(env: &Env, id: u64) -> Result<Campaign, ContractError> {
@@ -638,6 +640,28 @@ mod tests {
             &token_client.address,
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn id_generation_is_sequential_and_collision_free() {
+        let (env, client, creator, beneficiary, _, token_client, _) = setup();
+        env.budget().reset_unlimited();
+        set_timestamp(&env, 1_000);
+
+        let mut bens = Vec::new(&env);
+        bens.push_back((beneficiary.clone(), 10_000_u32));
+
+        for expected_id in 1_u64..=100_u64 {
+            let id = client.create_campaign(
+                &creator,
+                &bens,
+                &String::from_str(&env, "Bench"),
+                &1_000,
+                &2_000,
+                &token_client.address,
+            );
+            assert_eq!(id, expected_id);
+        }
     }
 
     #[test]
