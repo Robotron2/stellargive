@@ -100,7 +100,32 @@ The `minResourceFee` field in the simulation response shows the fee in stroops.
 (10 M stroops).  If your new function consistently triggers this warning, reduce
 its resource usage before merging.
 
-## 7. Pull Request Template (Use in every PR)
+## 7. Component Storybook
+
+The frontend ships with a Storybook for visual review of shared components
+(`Button`, `Progress`, `CampaignCard`, `DonateModal`, ...). Use it whenever
+you change a component to confirm light/dark rendering and mobile layout
+before opening a PR.
+
+```bash
+cd frontend
+npm install           # one-time, picks up @storybook/* devDeps
+npm run storybook     # serves at http://localhost:6006
+npm run build-storybook   # produces a static bundle under storybook-static/
+```
+
+Story conventions:
+- Co-locate `*.stories.tsx` next to the component it documents.
+- Cover at least the primary state, an "edge" state (loading / error /
+  empty), and one mobile viewport variant.
+- Shared mock data lives in [`frontend/src/stories/mocks.ts`](../frontend/src/stories/mocks.ts).
+- Use the theme toolbar to confirm dark-mode rendering — both themes share
+  the variables defined in [`frontend/src/app/globals.css`](../frontend/src/app/globals.css).
+
+A hosted Storybook URL will be added here once the team picks a host
+(Vercel or Chromatic) and the deploy workflow lands.
+
+## 8. Pull Request Template (Use in every PR)
 
 ```md
 ## Summary
