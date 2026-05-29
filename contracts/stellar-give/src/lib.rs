@@ -88,6 +88,7 @@ pub enum ContractError {
     CreationFeeTransferFailed = 25,
     InvalidUpdateContent = 26,
     TooManyUpdates = 27,
+    InvalidBeneficiary = 28,
 }
 
 fn next_id_key() -> Symbol {
@@ -357,10 +358,8 @@ fn sync_status(env: &Env, campaign: &mut Campaign) {
     }
 }
 
-/// Validates that `token_address` implements the Soroban token interface (SEP-41)
-/// by calling two lightweight read methods. Returns `InvalidToken` if either
-/// call fails, preventing campaigns from being created with non-compliant or
-/// malicious token contracts.
+/// Validates that a URL is a plausible HTTPS or IPFS metadata/social link.
+/// Keeps campaign metadata constrained to safe, externally resolvable URIs.
 #[allow(clippy::manual_range_contains)]
 fn validate_url(url: &String) -> Result<(), ContractError> {
     let len = url.len() as usize;
@@ -383,6 +382,24 @@ fn validate_token_contract(env: &Env, token_address: &Address) -> Result<(), Con
     }
     if client.try_symbol().is_err() {
         return Err(ContractError::InvalidToken);
+    }
+    Ok(())
+}
+
+/// Rejects campaigns that name the contract itself as a beneficiary.
+///
+/// If the contract address is allowed into the payout set, `claim_funds`
+/// would transfer funds back into contract-owned storage instead of an
+/// externally controlled account, which can permanently lock user funds.
+fn validate_beneficiaries(
+    env: &Env,
+    beneficiaries: &Vec<(Address, u32)>,
+) -> Result<(), ContractError> {
+    let contract_address = env.current_contract_address();
+    for (beneficiary, _) in beneficiaries.iter() {
+        if beneficiary == contract_address {
+            return Err(ContractError::InvalidBeneficiary);
+        }
     }
     Ok(())
 }
@@ -413,6 +430,7 @@ impl StellarGiveContract {
     ///
     /// # Errors
     /// * `InvalidToken` if `accepted_token` does not implement `decimals()` and `symbol()`.
+    /// * `InvalidBeneficiary` if any beneficiary matches the contract address.
     #[allow(clippy::too_many_arguments)]
     pub fn create_campaign(
         env: Env,
@@ -494,6 +512,12 @@ impl StellarGiveContract {
         if beneficiaries.is_empty() {
             return Err(ContractError::InvalidShares);
         }
+
+        // Prevent self-referential payout plans. If the contract is listed as a
+        // beneficiary, claim settlement would route funds back into the contract
+        // address and lock them there permanently.
+        validate_beneficiaries(&env, &beneficiaries)?;
+
         let mut total_bps: u64 = 0;
         for (_, share) in beneficiaries.iter() {
             total_bps += u64::from(share);
@@ -936,6 +960,32 @@ mod tests {
     }
 
     #[test]
+    fn create_campaign_rejects_contract_address_as_beneficiary() {
+        let (env, client, creator, _beneficiary, _donor, _admin, token_client, _) = setup();
+        set_timestamp(&env, 1_000);
+
+        let contract_beneficiary =
+            env.as_contract(&client.address, || env.current_contract_address());
+        let mut bens = Vec::new(&env);
+        bens.push_back((contract_beneficiary, 10_000_u32));
+
+        let result = client.try_create_campaign(
+            &creator,
+            &bens,
+            &String::from_str(&env, "Locked Funds"),
+            &String::from_str(&env, "https://example.com/meta"),
+            &10_000_000,
+            &2_000,
+            &token_client.address,
+            &None,
+            &None,
+            &None,
+        );
+
+        assert_eq!(result, Err(Ok(ContractError::InvalidBeneficiary)));
+    }
+
+    #[test]
     fn create_campaign_enforces_max_duration() {
         let (env, client, creator, beneficiary, _donor, _admin, token_client, _) = setup();
         set_timestamp(&env, 1_000);
@@ -1096,7 +1146,10 @@ mod tests {
             .expect("event data did not decode as GoalReachedEvent");
         assert_eq!(payload.campaign_id, campaign_id);
         assert_eq!(payload.total_raised, 10_000_000);
-        assert_eq!(client.get_campaign(&campaign_id).status, CampaignStatus::Funded);
+        assert_eq!(
+            client.get_campaign(&campaign_id).status,
+            CampaignStatus::Funded
+        );
     }
 
     #[test]
@@ -1152,7 +1205,10 @@ mod tests {
             .expect("event data did not decode as GoalReachedEvent");
         assert_eq!(payload.campaign_id, campaign_id);
         assert_eq!(payload.total_raised, 11_000_000);
-        assert_eq!(client.get_campaign(&campaign_id).status, CampaignStatus::Funded);
+        assert_eq!(
+            client.get_campaign(&campaign_id).status,
+            CampaignStatus::Funded
+        );
     }
 
     #[test]
@@ -1732,7 +1788,8 @@ mod tests {
         set_timestamp(&env, 1_000);
         let bens = single_ben(&env, &beneficiary);
 
-        let valid_title = String::from_str(&env, "12345678901234567890123456789012345678901234567890");
+        let valid_title =
+            String::from_str(&env, "12345678901234567890123456789012345678901234567890");
         let ok = client.try_create_campaign(
             &creator,
             &bens,
@@ -1953,32 +2010,32 @@ mod tests {
     #[test]
     fn test_next_id_migration_and_instance_storage() {
         let (env, client, creator, beneficiary, _donor, _admin, token_client, _) = setup();
-        
+
         env.as_contract(&client.address, || {
             let key = next_id_key();
-            
+
             // Ensure starting state is 1
             assert_eq!(read_next_id(&env), 1);
-            
+
             // Simulate old deployment by setting NEXT_ID in persistent storage manually
             let old_id: u64 = 42;
             env.storage().persistent().set(&key, &old_id);
-            
+
             // Ensure it's not in instance storage yet
             assert!(env.storage().instance().get::<_, u64>(&key).is_none());
-            
+
             // 1. Next read should migrate from persistent to instance
             let read_id = read_next_id(&env);
             assert_eq!(read_id, old_id);
-            
+
             // 2. Verify it was removed from persistent
             assert!(env.storage().persistent().get::<_, u64>(&key).is_none());
-            
+
             // 3. Verify it was written to instance
             let instance_id = env.storage().instance().get::<_, u64>(&key).unwrap();
             assert_eq!(instance_id, old_id);
         });
-        
+
         // Create a campaign, should use the migrated ID 42 and increment to 43
         let bens = single_ben(&env, &beneficiary);
         let campaign_id = client.create_campaign(
@@ -1993,9 +2050,9 @@ mod tests {
             &None,
             &None,
         );
-        
+
         assert_eq!(campaign_id, 42);
-        
+
         // Check next id is 43 in instance storage
         env.as_contract(&client.address, || {
             let key = next_id_key();
