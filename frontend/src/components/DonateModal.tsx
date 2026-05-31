@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
 import { useDonate } from "@/hooks/useSoroban";
 import { Campaign } from "@/lib/soroban";
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,23 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Check } from "lucide-react";
 import confetti from "canvas-confetti";
 
-export function DonateModal({ campaign }: { campaign: Campaign }) {
-  const [amount, setAmount] = useState("");
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isValid },
+    clearErrors,
+    setError,
+  } = useForm<{ amount: string }>({
+    mode: "onChange",
+    defaultValues: { amount: "" },
+  });
+  const amount = watch("amount");
+  // Calculate remaining goal
+  const target = Number(campaign.target_amount) / 1e7;
+  const raised = Number(campaign.raised_amount) / 1e7;
+  const remaining = Math.max(target - raised, 0);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -36,26 +52,21 @@ export function DonateModal({ campaign }: { campaign: Campaign }) {
     }
   }, [donate.isSuccess]);
 
-  const handleDonate = async () => {
-    if (donate.isPending) return; // Lock duplicate submissions
-    if (!amount || isNaN(Number(amount))) {
-      return;
-    }
-
+  const onSubmit = async (data: { amount: string }) => {
+    if (donate.isPending) return;
     try {
       const result = await donate.mutateAsync({
         campaignId: campaign.id,
-        amount,
+        amount: data.amount,
         isAnonymous,
       });
-      setSuccessAmount(amount);
+      setSuccessAmount(data.amount);
       setSuccessTxHash((result as any).hash || "");
       setShowSuccess(true);
       setIsOpen(false);
-      setAmount("");
+      setValue("amount", "");
       setIsAnonymous(false);
     } catch (e: any) {
-      // Errors are already handled by sonner inside useDonate mutation wrapper
       console.error(e);
     }
   };
@@ -86,12 +97,30 @@ export function DonateModal({ campaign }: { campaign: Campaign }) {
               <Label htmlFor="amount">Amount</Label>
               <Input
                 id="amount"
-                type="number"
+                inputMode="decimal"
+                autoComplete="off"
                 placeholder="10.0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                {...register("amount", {
+                  required: "Amount is required",
+                  pattern: {
+                    value: /^\d*\.?\d*$/,
+                    message: "Enter a valid number",
+                  },
+                  validate: (value) => {
+                    if (isNaN(Number(value))) return "Enter a valid number";
+                    if (Number(value) <= 0) return "Amount must be greater than zero";
+                    if (Number(value) > remaining) return "This exceeds the remaining goal";
+                    return true;
+                  },
+                })}
                 disabled={donate.isPending}
               />
+              {errors.amount && (
+                <span className="text-xs text-red-500 mt-1">{errors.amount.message}</span>
+              )}
+              {!errors.amount && amount && Number(amount) > remaining && (
+                <span className="text-xs text-yellow-600 mt-1">This exceeds the remaining goal</span>
+              )}
             </div>
             <div className="grid gap-1">
               <div className="flex items-center space-x-2 pt-2">
@@ -116,7 +145,10 @@ export function DonateModal({ campaign }: { campaign: Campaign }) {
             <Button variant="outline" onClick={() => setIsOpen(false)} disabled={donate.isPending}>
               Cancel
             </Button>
-            <Button onClick={handleDonate} disabled={donate.isPending}>
+            <Button
+              onClick={handleSubmit(onSubmit)}
+              disabled={donate.isPending || !isValid}
+            >
               {donate.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
