@@ -287,9 +287,11 @@ fn extend_instance_ttl(env: &Env) {
 }
 
 fn extend_persistent_ttl<K: IntoVal<Env, Val>>(env: &Env, key: &K) {
-    env.storage()
-        .persistent()
-        .extend_ttl(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+    env.storage().persistent().extend_ttl(
+        key,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
 }
 
 fn read_next_id(env: &Env) -> u64 {
@@ -444,7 +446,7 @@ fn write_update_count(env: &Env, id: u64, count: u32) {
 fn read_update(env: &Env, id: u64, idx: u32) -> Option<Update> {
     let key = update_key(id, idx);
     let update: Option<Update> = env.storage().persistent().get(&key);
-    if let Some(_) = update {
+    if update.is_some() {
         extend_persistent_ttl(env, &key);
     }
     update
@@ -660,10 +662,8 @@ impl StellarGiveContract {
         let admin = read_admin(&env)?;
         admin.require_auth();
         env.storage().instance().set(&paused_key(), &true);
-        env.events().publish(
-            (symbol_short!("paused"),),
-            PausedEvent { admin },
-        );
+        env.events()
+            .publish((symbol_short!("paused"),), PausedEvent { admin });
         Ok(())
     }
 
@@ -672,10 +672,8 @@ impl StellarGiveContract {
         let admin = read_admin(&env)?;
         admin.require_auth();
         env.storage().instance().set(&paused_key(), &false);
-        env.events().publish(
-            (symbol_short!("unpaused"),),
-            UnpausedEvent { admin },
-        );
+        env.events()
+            .publish((symbol_short!("unpaused"),), UnpausedEvent { admin });
         Ok(())
     }
 
@@ -864,10 +862,8 @@ impl StellarGiveContract {
             }
 
             // If campaign is private, ensure donor is whitelisted
-            if campaign.is_private {
-                if !read_whitelist(&env, campaign_id, &donor) {
-                    return Err(ContractError::NotWhitelisted);
-                }
+            if campaign.is_private && !read_whitelist(&env, campaign_id, &donor) {
+                return Err(ContractError::NotWhitelisted);
             }
 
             if let Some(cap) = campaign.max_per_donor {
@@ -1012,11 +1008,7 @@ impl StellarGiveContract {
     ///
     /// # Returns
     /// `Ok(amount)` with the refunded amount in stroops.
-    pub fn claim_refund(
-        env: Env,
-        donor: Address,
-        campaign_id: u64,
-    ) -> Result<i128, ContractError> {
+    pub fn claim_refund(env: Env, donor: Address, campaign_id: u64) -> Result<i128, ContractError> {
         donor.require_auth();
 
         let mut campaign = read_campaign(&env, campaign_id)?;
@@ -1168,8 +1160,11 @@ impl StellarGiveContract {
             }
 
             // Transfer exact donated amount back to the donor.
-            token::Client::new(&env, &campaign.accepted_token)
-                .transfer(&env.current_contract_address(), &donor, &donated);
+            token::Client::new(&env, &campaign.accepted_token).transfer(
+                &env.current_contract_address(),
+                &donor,
+                &donated,
+            );
 
             // Reset donor contribution and update campaign total.
             write_donor_contribution(&env, campaign_id, &donor, 0);
@@ -2420,7 +2415,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Bench"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -2764,7 +2759,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Cap Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &MIN_TARGET,
@@ -3186,7 +3181,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Medical Aid Fund"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://ipfs.io/ipfs/QmTest123"),
                 &symbol_short!("medical"),
                 &50_000_000,
@@ -3223,7 +3218,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "IPFS Campaign"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "ipfs://QmYwAPJzv5CZsnN625s3XfREM3zN1Bv2e7v6b1ALg"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3249,7 +3244,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Shelter Build"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/shelter"),
                 &symbol_short!("shelter"),
                 &100_000_000,
@@ -3290,7 +3285,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Social Campaign"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("other"),
                 &10_000_000,
@@ -3383,7 +3378,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Zero Target"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &0,
@@ -3404,7 +3399,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Low Target"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &(MIN_TARGET - 1),
@@ -3425,7 +3420,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Min Target"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &MIN_TARGET,
@@ -3446,7 +3441,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Past Deadline"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3467,7 +3462,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Equal Deadline"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3488,7 +3483,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Too Far"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3509,7 +3504,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "One Year Max"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3575,7 +3570,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Bad Category"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("sports"),
                 &10_000_000,
@@ -3599,7 +3594,7 @@ mod tests {
                     &creator,
                     &bens,
                     &String::from_str(&env, "Cat Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                    &String::from_str(&env, "A sample campaign description."),
                     &String::from_str(&env, "https://example.com/meta"),
                     &Symbol::new(&env, cat),
                     &10_000_000,
@@ -3624,7 +3619,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Contract Ben"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3649,7 +3644,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Bad Shares"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3683,7 +3678,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Second Campaign"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta2"),
                 &symbol_short!("education"),
                 &20_000_000,
@@ -3717,7 +3712,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Creator 1 Campaign"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3729,7 +3724,7 @@ mod tests {
                 &creator2,
                 &bens,
                 &String::from_str(&env, "Creator 2 Campaign"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -3751,7 +3746,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Exact Match"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/exact"),
                 &symbol_short!("food"),
                 &77_777_777,
@@ -3789,7 +3784,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Event Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &25_000_000,
@@ -3847,7 +3842,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Integration Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4112,7 +4107,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Partial Fund"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &50_000_000,
@@ -4160,7 +4155,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Reentrancy Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4239,7 +4234,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign A"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/a"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4251,7 +4246,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign B"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/b"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4279,7 +4274,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Donate Lock"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &100_000_000,
@@ -4309,7 +4304,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "No Double"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4342,7 +4337,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Claimed Event Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4384,7 +4379,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Auth Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4423,7 +4418,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Clean Lock"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4456,7 +4451,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Auto Claim Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4494,7 +4489,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Auto Claim Reject Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4533,7 +4528,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Auto Claimed Event Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4575,7 +4570,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Over Target Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4621,7 +4616,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Multi Ben Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4669,7 +4664,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Public Campaign"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4714,7 +4709,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Time Test"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4741,7 +4736,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Time Test Future"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4765,7 +4760,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Exact Deadline"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4807,7 +4802,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Progressive Time"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4848,7 +4843,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign 1"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4860,7 +4855,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign 2"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4872,7 +4867,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign 3"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4894,7 +4889,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign 1"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4906,7 +4901,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign 2"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -4918,7 +4913,7 @@ mod tests {
                 &creator,
                 &bens,
                 &String::from_str(&env, "Campaign 3"),
-            &String::from_str(&env, "A sample campaign description."),
+                &String::from_str(&env, "A sample campaign description."),
                 &String::from_str(&env, "https://example.com/meta"),
                 &symbol_short!("relief"),
                 &10_000_000,
@@ -5101,7 +5096,10 @@ mod tests {
                     (new_owner.clone(),).into_val(&env)
                 )])
                 .try_set_owner(&new_owner);
-            assert!(result.is_err(), "beneficiary address must not bypass set_owner auth");
+            assert!(
+                result.is_err(),
+                "beneficiary address must not bypass set_owner auth"
+            );
         }
 
         // -------------------------------------------------------------------
@@ -5284,7 +5282,10 @@ mod tests {
                     (dummy.clone(),).into_val(&env)
                 )])
                 .try_upgrade(&dummy);
-            assert!(result_a.is_err(), "original admin must be rejected after two-hop transfer");
+            assert!(
+                result_a.is_err(),
+                "original admin must be rejected after two-hop transfer"
+            );
 
             // Owner B must now be rejected
             let result_b = client
@@ -5295,7 +5296,10 @@ mod tests {
                     (dummy.clone(),).into_val(&env)
                 )])
                 .try_upgrade(&dummy);
-            assert!(result_b.is_err(), "intermediate owner B must be rejected after transfer to C");
+            assert!(
+                result_b.is_err(),
+                "intermediate owner B must be rejected after transfer to C"
+            );
         }
     }
 
