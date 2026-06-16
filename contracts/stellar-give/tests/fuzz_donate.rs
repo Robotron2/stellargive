@@ -7,7 +7,7 @@
 
 use proptest::prelude::*;
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, token, Address, Env, String, Vec,
+    symbol_short, testutils::Address as _, token, Address, Env, String,
 };
 use stellar_give::{ContractError, StellarGiveContract, StellarGiveContractClient};
 
@@ -57,10 +57,11 @@ fn setup_fuzz_campaign(target_amount: i128) -> (
         &creator,
         &bens,
         &String::from_str(&env, "Fuzz Campaign"),
+        &String::from_str(&env, "A test campaign description."),
         &String::from_str(&env, "https://example.com/fuzz"),
         &symbol_short!("relief"),
         &target_amount,
-        &32_537_000_u64, // ~1 year from now
+        &31_537_000_u64, // 1 year from now (now + MAX_DURATION)
         &token_client.address,
         &None,
     );
@@ -79,7 +80,7 @@ proptest! {
     ) {
         // Use a target higher than any single donation to avoid auto-claim
         let target = i128::MAX / 2;
-        let (env, client, donor, campaign_id, _token_client) = setup_fuzz_campaign(target);
+        let (_env, client, donor, campaign_id, _token_client) = setup_fuzz_campaign(target);
 
         let campaign_before = client.get_campaign(&campaign_id);
         let old_raised = campaign_before.raised_amount;
@@ -193,10 +194,11 @@ fn test_overflow_returns_arithmetic_error() {
         &creator,
         &bens,
         &String::from_str(&env, "Overflow Test"),
+        &String::from_str(&env, "A test campaign description."),
         &String::from_str(&env, "https://example.com/overflow"),
         &symbol_short!("relief"),
         &(i128::MAX / 2),
-        &32_537_000_u64,
+        &31_537_000_u64,
         &token_client.address,
         &None,
     );
@@ -265,10 +267,11 @@ fn test_max_i128_donation_rejected() {
         &creator,
         &bens,
         &String::from_str(&env, "MaxBoundary"),
+        &String::from_str(&env, "A test campaign description."),
         &String::from_str(&env, "https://example.com/max"),
         &symbol_short!("relief"),
         &(i128::MAX / 2),
-        &32_537_000_u64,
+        &31_537_000_u64,
         &token_client.address,
         &None,
     );
