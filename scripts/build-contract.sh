@@ -5,8 +5,8 @@ echo "Building contract..."
 cd contracts/stellar-give
 cargo build --release --target wasm32-unknown-unknown
 
-ORIGINAL_WASM="../../target/wasm32-unknown-unknown/release/stellar_give.wasm"
-OPTIMIZED_WASM="../../target/wasm32-unknown-unknown/release/stellar_give.optimized.wasm"
+ORIGINAL_WASM="target/wasm32-unknown-unknown/release/stellar_give.wasm"
+OPTIMIZED_WASM="target/wasm32-unknown-unknown/release/stellar_give.optimized.wasm"
 
 if [ ! -f "$ORIGINAL_WASM" ]; then
     echo "Error: Original WASM not found at $ORIGINAL_WASM"
