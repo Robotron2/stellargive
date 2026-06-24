@@ -34,12 +34,10 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        working-directory: frontend
         run: npx playwright install --with-deps chromium
 
       - name: Run visual regression tests
-        working-directory: frontend
-        run: npx playwright test --project=desktop --project=mobile
+        run: npx playwright test --config frontend/playwright.config.ts --project=desktop --project=mobile
         env:
           CI: true
 
