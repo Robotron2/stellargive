@@ -43,11 +43,9 @@ export default defineConfig({
         process.env.NEXT_PUBLIC_CONTRACT_ID ??
         "CB6HVHRQYILGNKW7RBB66BC6TDBIEWADOA2YUUV4I22RXRLA6DY6OAKT",
       NEXT_PUBLIC_SOROBAN_RPC_URL:
-        process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ??
-        "https://soroban-testnet.stellar.org",
+        process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org",
       NEXT_PUBLIC_NETWORK_PASSPHRASE:
-        process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ??
-        "Test SDF Network ; September 2015",
+        process.env.NEXT_PUBLIC_NETWORK_PASSPHRASE ?? "Test SDF Network ; September 2015",
     },
   },
 });
