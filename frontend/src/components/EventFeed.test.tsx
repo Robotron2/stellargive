@@ -30,36 +30,56 @@ beforeEach(() => {
 });
 
 describe("EventFeed — loading state", () => {
-  it("shows a spinner while events are loading", () => {
+  it("renders skeleton placeholders while events are loading", () => {
     vi.mocked(useEvents).mockReturnValue({ data: undefined, isLoading: true } as any);
     const { container } = render(<EventFeed />);
-    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
+    // Skeleton uses the `animate-pulse` utility; presence of any node with it
+    // is sufficient evidence we rendered placeholder bars rather than a spinner.
+    expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
   });
 
-  it("does not render the card in the loading state", () => {
+  it("renders the card heading and an aria-busy region in the loading state", () => {
     vi.mocked(useEvents).mockReturnValue({ data: undefined, isLoading: true } as any);
     render(<EventFeed />);
-    expect(screen.queryByText(/Recent Activity/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Recent Activity/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Loading recent activity/i)).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+  });
+
+  it("does not render the empty-state copy in the loading state", () => {
+    vi.mocked(useEvents).mockReturnValue({ data: undefined, isLoading: true } as any);
+    render(<EventFeed />);
+    expect(screen.queryByText(/No activity yet/i)).not.toBeInTheDocument();
   });
 });
 
 describe("EventFeed — empty state", () => {
-  it("shows 'Waiting for on-chain events…' when events array is empty", () => {
+  it("shows 'No activity yet' when events array is empty", () => {
     vi.mocked(useEvents).mockReturnValue({ data: [], isLoading: false } as any);
     render(<EventFeed />);
-    expect(screen.getByText(/Waiting for on-chain events/i)).toBeInTheDocument();
+    expect(screen.getByText(/No activity yet/i)).toBeInTheDocument();
   });
 
-  it("shows 'Waiting for on-chain events…' when events data is undefined", () => {
+  it("shows 'No activity yet' when events data is undefined", () => {
     vi.mocked(useEvents).mockReturnValue({ data: undefined, isLoading: false } as any);
     render(<EventFeed />);
-    expect(screen.getByText(/Waiting for on-chain events/i)).toBeInTheDocument();
+    expect(screen.getByText(/No activity yet/i)).toBeInTheDocument();
   });
 
   it("renders the card heading in the empty state", () => {
     vi.mocked(useEvents).mockReturnValue({ data: [], isLoading: false } as any);
     render(<EventFeed />);
     expect(screen.getByText(/Recent Activity/i)).toBeInTheDocument();
+  });
+
+  it("announces the empty state via aria-live=polite for screen readers", () => {
+    vi.mocked(useEvents).mockReturnValue({ data: [], isLoading: false } as any);
+    render(<EventFeed />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent(/No activity yet/i);
   });
 });
 
@@ -128,6 +148,6 @@ describe("EventFeed — populated state", () => {
       isLoading: false,
     } as any);
     render(<EventFeed />);
-    expect(screen.queryByText(/Waiting for on-chain events/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No activity yet/i)).not.toBeInTheDocument();
   });
 });
