@@ -12,6 +12,9 @@ import {
   getEvents,
   getUpdates,
   getTotalCampaigns,
+  getTopDonors,
+  getOwner,
+  getIsPaused,
 } from "@/lib/soroban";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
@@ -387,4 +390,94 @@ export function useCancelCampaign() {
       }
     },
   });
+}
+
+export function useOwner() {
+  return useQuery({
+    queryKey: ["owner"],
+    queryFn: () => getOwner(),
+  });
+}
+
+export function useIsPaused() {
+  return useQuery({
+    queryKey: ["is-paused"],
+    queryFn: () => getIsPaused(),
+    refetchInterval: 30_000,
+  });
+}
+
+export function usePauseControls() {
+  const { address } = useWallet();
+  const queryClient = useQueryClient();
+
+  const pause = useMutation({
+    mutationFn: async () => {
+      if (!address) throw new Error("Wallet not connected");
+      return submitTransaction(address, "pause", []);
+    },
+    onMutate: () => {
+      const toastId = toast.loading("Pausing contract...");
+      return { toastId };
+    },
+    onSuccess: (data: any, _variables, context) => {
+      const action = data?.hash
+        ? {
+            label: "View Explorer",
+            onClick: () =>
+              window.open(`https://stellar.expert/explorer/testnet/tx/${data.hash}`, "_blank"),
+          }
+        : undefined;
+      if (context?.toastId) {
+        toast.success("Contract paused successfully", { id: context.toastId, action });
+      } else {
+        toast.success("Contract paused successfully", { action });
+      }
+      queryClient.invalidateQueries({ queryKey: ["is-paused"] });
+    },
+    onError: (error: any, _variables, context) => {
+      const mappedError = mapTransactionError(error);
+      if (context?.toastId) {
+        toast.error(mappedError, { id: context.toastId });
+      } else {
+        toast.error(mappedError);
+      }
+    },
+  });
+
+  const unpause = useMutation({
+    mutationFn: async () => {
+      if (!address) throw new Error("Wallet not connected");
+      return submitTransaction(address, "unpause", []);
+    },
+    onMutate: () => {
+      const toastId = toast.loading("Unpausing contract...");
+      return { toastId };
+    },
+    onSuccess: (data: any, _variables, context) => {
+      const action = data?.hash
+        ? {
+            label: "View Explorer",
+            onClick: () =>
+              window.open(`https://stellar.expert/explorer/testnet/tx/${data.hash}`, "_blank"),
+          }
+        : undefined;
+      if (context?.toastId) {
+        toast.success("Contract unpaused successfully", { id: context.toastId, action });
+      } else {
+        toast.success("Contract unpaused successfully", { action });
+      }
+      queryClient.invalidateQueries({ queryKey: ["is-paused"] });
+    },
+    onError: (error: any, _variables, context) => {
+      const mappedError = mapTransactionError(error);
+      if (context?.toastId) {
+        toast.error(mappedError, { id: context.toastId });
+      } else {
+        toast.error(mappedError);
+      }
+    },
+  });
+
+  return { pause, unpause };
 }

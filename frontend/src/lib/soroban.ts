@@ -399,3 +399,59 @@ export async function getTokenMetadata(contractId: string): Promise<TokenMetadat
 
   return { symbol, decimals };
 }
+
+export async function getOwner(): Promise<string> {
+  const tx = new TransactionBuilder(
+    new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
+    {
+      fee: "100",
+      networkPassphrase: NETWORK_PASSPHRASE,
+    },
+  )
+    .addOperation(
+      Operation.invokeHostFunction({
+        func: "get_owner",
+        contractId: CONTRACT_ID,
+        args: [],
+      } as any),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (rpc.Api.isSimulationError(sim)) {
+    throw new Error(`Simulation failed: ${sim.error}`);
+  }
+  if (!sim.result) throw new Error("Failed to get owner: no result");
+  const result = scValToNative(sim.result.retval);
+  return result.toString();
+}
+
+export async function getIsPaused(): Promise<boolean> {
+  const tx = new TransactionBuilder(
+    new Account("GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", "0"),
+    {
+      fee: "100",
+      networkPassphrase: NETWORK_PASSPHRASE,
+    },
+  )
+    .addOperation(
+      Operation.invokeHostFunction({
+        func: "cancel_campaign",
+        contractId: CONTRACT_ID,
+        args: [nativeToScVal(99999999n, { type: "u64" })],
+      } as any),
+    )
+    .setTimeout(30)
+    .build();
+
+  const sim = await server.simulateTransaction(tx);
+  if (rpc.Api.isSimulationError(sim)) {
+    // ContractError 33 means ContractPaused
+    if (sim.error.includes("33") || sim.error.includes("ContractPaused") || sim.error.includes("Error(Contract, 33)")) {
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
